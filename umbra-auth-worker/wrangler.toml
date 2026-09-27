@@ -1,0 +1,11 @@
+name = "umbra-auth"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "umbra-a97d8"
+
+# Bağlanabilen uygulamalar ve isteyebilecekleri scope'lar.
+# Umbra'daki lib/data/connect/external_apps.dart → kExternalApps ile aynı tutulmalı.
+[vars.APP_SCOPES]
+litlist = ["identity.name", "identity.role", "reading.profile", "memory.preferences", "memory.patterns", "memory.live"]

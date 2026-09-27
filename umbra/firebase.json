@@ -1,0 +1,4 @@
+{
+  "firestore": [{ "database": "default", "rules": "firestore.rules" }],
+  "flutter": {"platforms":{"android":{"default":{"projectId":"umbra-a97d8","appId":"1:643714938667:android:d4a8a85db132a54da2f76e","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"umbra-a97d8","configurations":{"android":"1:643714938667:android:d4a8a85db132a54da2f76e","ios":"1:643714938667:ios:b403eb615a7f38dca2f76e","web":"1:643714938667:web:62f898cd37e98903a2f76e"}}}}}
+}

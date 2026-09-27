@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// Umbra + bağlı uygulamalar (LitList) güvenlik kuralları.
+//
+// İki tür oturum var:
+//  - Umbra oturumu: e-posta/şifre ile açılır, token'da `app` etiketi YOKTUR.
+//    Kullanıcının bütün verisine erişir.
+//  - Bağlı uygulama oturumu: "Umbra ile devam et" → Worker → custom token.
+//    Token'da `app: "litlist"` etiketi vardır. SADECE şunlara erişir:
+//      * users/{uid}/shared/{app}      (Umbra'nın paylaştığı veri, salt okunur)
+//      * apps/{app}/users/{uid}/...    (uygulamanın kendi verisi)
+//      * events → sadece `proposal` bırakabilir (Umbra'da "To review"ya düşer)
+//    Kullanıcı Umbra'dan bağlantıyı kesince shared dokümanı silinir ve
+//    uygulamanın erişimi anında biter.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isClientSession() {
+      return signedIn() && ('app' in request.auth.token);
+    }
+    function isUmbra() {
+      return signedIn() && !('app' in request.auth.token);
+    }
+    function isClient(appId) {
+      return isClientSession() && request.auth.token.app == appId;
+    }
+    function isSelf(uid) {
+      return request.auth.uid == uid;
+    }
+    function ownsExisting() {
+      return request.auth.uid == resource.data.user_id;
+    }
+    function ownsIncoming() {
+      return request.auth.uid == request.resource.data.user_id;
+    }
+    function isLinked(uid, appId) {
+      return exists(/databases/$(database)/documents/users/$(uid)/shared/$(appId));
+    }
+
+    // Umbra'nın kullanıcıya ait koleksiyonları (user_id alanlı)
+    function umbraOwned() {
+      return isUmbra() && (
+        (request.method == 'create' && ownsIncoming()) ||
+        (request.method == 'update' && ownsExisting() && ownsIncoming()) ||
+        (request.method in ['get', 'list', 'delete'] && ownsExisting())
+      );
+    }
+
+    // --- Profil + paylaşım dokümanları ----------------------------------
+    match /users/{uid} {
+      allow read, write: if isUmbra() && isSelf(uid);
+
+      match /shared/{appId} {
+        allow read, write: if isUmbra() && isSelf(uid);
+        allow get: if isClient(appId) && isSelf(uid);
+      }
+    }
+
+    // --- Umbra verisi ----------------------------------------------------
+    match /memories/{id} {
+      allow read, write: if umbraOwned();
+    }
+    match /app_grants/{id} {
+      allow read, write: if umbraOwned();
+    }
+    match /events/{id} {
+      allow read, write: if umbraOwned();
+
+      // Bağlı uygulama sadece öneri bırakabilir; okuyamaz, silemez.
+      allow create: if isClientSession()
+        && ownsIncoming()
+        && request.resource.data.kind == 'proposal'
+        && request.resource.data.app_id == request.auth.token.app
+        && isLinked(request.auth.uid, request.auth.token.app);
+    }
+
+    // --- Bağlı uygulamaların kendi verisi ---------------------------------
+    match /apps/{appId}/users/{uid}/{document=**} {
+      allow read, write: if isClient(appId) && isSelf(uid) && isLinked(uid, appId);
+      // Umbra, kullanıcının isteğiyle bu veriyi görebilir / silebilir.
+      allow read, delete: if isUmbra() && isSelf(uid);
+    }
+  }
+}
